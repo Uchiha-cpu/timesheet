@@ -143,27 +143,33 @@
         <!-- Monthly Summary -->
         <div class="bg-white rounded-xl card-shadow p-6 mb-8 animate-fade-in">
             <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                📈 Monthly Summary
+                📈 Monthly Summary for {{ summaryMonthYear }}
             </h3>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div ng-repeat="(employee, stats) in monthlySummary" class="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-4 border border-blue-200">
-                    <h4 class="font-bold text-gray-800 mb-2">{{employee}}</h4>
-                    <div class="space-y-1 text-sm">
-                        <div class="flex justify-between">
-                            <span>🏠 WFH:</span>
-                            <span class="font-medium" ng-class="{'text-red-600': stats.H > 8, 'text-green-600': stats.H <= 8}">{{stats.H || 0}}</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>🏢 Office:</span>
-                            <span class="font-medium text-blue-600">{{stats.O || 0}}</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>🏖️ Leave:</span>
-                            <span class="font-medium text-orange-600">{{(stats.L || 0) + (stats.L1 || 0) + (stats.L2 || 0)}}</span>
-                        </div>
-                    </div>
-                </div>
+            <div class="overflow-x-auto">
+                <table class="w-full border-collapse text-center text-sm">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-2 py-2 border text-left text-xs font-medium text-gray-600 uppercase sticky left-0 bg-gray-100 z-10">Employee</th>
+                            <th ng-repeat="day in summaryDays" class="px-2 py-2 border text-xs font-medium text-gray-600 w-10">{{day}}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white">
+                        <tr ng-repeat="name in getObjectKeys(monthlySummaryGrid)" class="hover:bg-gray-50">
+                            <td class="px-2 py-2 border text-left font-medium text-gray-800 whitespace-nowrap sticky left-0 bg-white hover:bg-gray-50 z-10">{{name}}</td>
+                            <td ng-repeat="day in summaryDays" class="px-2 py-2 border">
+                                <span class="font-bold" ng-class="{
+                                    'text-green-700': monthlySummaryGrid[name][day] === 'H',
+                                    'text-blue-700': monthlySummaryGrid[name][day] === 'O',
+                                    'text-red-700': monthlySummaryGrid[name][day] === 'L',
+                                    'text-orange-700': monthlySummaryGrid[name][day] === 'L1',
+                                    'text-yellow-800': monthlySummaryGrid[name][day] === 'L2'
+                                }">
+                                    {{monthlySummaryGrid[name][day]}}
+                                </span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -277,16 +283,23 @@
             $scope.entries = [];
             $scope.filteredEntries = [];
             $scope.uniqueEmployees = [];
-            $scope.monthlySummary = {};
+            $scope.monthlySummaryGrid = {};
+            $scope.summaryDays = [];
+            $scope.summaryMonthYear = '';
             $scope.wfhAlerts = [];
 
             $scope.newEntry = {};
             $scope.editingEntry = null;
+            $scope.originalEntryToEdit = null; // To hold a reference to the original entry being edited
 
             $scope.filters = {
                 employee: '',
                 month: '',
                 status: ''
+            };
+
+            $scope.getObjectKeys = function(obj) {
+                return obj ? Object.keys(obj).sort() : [];
             };
 
             // Load data from localStorage on init
@@ -309,9 +322,23 @@
             // Add new entry
             $scope.addEntry = function() {
                 if ($scope.newEntry.name && $scope.newEntry.date && $scope.newEntry.status) {
+                    const newEntryDate = new Date($scope.newEntry.date);
+                    const isDuplicate = $scope.entries.some(entry => {
+                        const existingDate = new Date(entry.date);
+                        return entry.name === $scope.newEntry.name &&
+                               existingDate.getFullYear() === newEntryDate.getFullYear() &&
+                               existingDate.getMonth() === newEntryDate.getMonth() &&
+                               existingDate.getDate() === newEntryDate.getDate();
+                    });
+
+                    if (isDuplicate) {
+                        alert('Error: An entry for ' + $scope.newEntry.name + ' on ' + newEntryDate.toLocaleDateString() + ' already exists.');
+                        return;
+                    }
+
                     $scope.entries.push({
                         name: $scope.newEntry.name,
-                        date: new Date($scope.newEntry.date),
+                        date: newEntryDate,
                         status: $scope.newEntry.status
                     });
                     $scope.saveData();
@@ -322,31 +349,43 @@
 
             // Edit entry
             $scope.editEntry = function(entry) {
+                // Store a reference to the original object
+                $scope.originalEntryToEdit = entry;
+                // Make a copy for editing in the modal
                 $scope.editingEntry = angular.copy(entry);
+                // Ensure the date is a Date object for the input[type=date]
+                $scope.editingEntry.date = new Date(entry.date);
             };
 
             // Update entry
             $scope.updateEntry = function() {
-                if ($scope.editingEntry) {
-                    const originalEntry = $scope.entries.find(e => e.$hashKey === $scope.editingEntry.$hashKey);
-                    if (originalEntry) {
-                        Object.assign(originalEntry, $scope.editingEntry);
-                        $scope.saveData();
-                        $scope.editingEntry = null;
-                        $scope.updateAll();
-                    }
+                if ($scope.editingEntry && $scope.originalEntryToEdit) {
+                    // The date from the input can be a string, convert it back to a Date object
+                    $scope.editingEntry.date = new Date($scope.editingEntry.date);
+                    
+                    // Copy the updated values back to the original entry
+                    Object.assign($scope.originalEntryToEdit, $scope.editingEntry);
+                    
+                    $scope.saveData();
+                    
+                    // Reset editing state
+                    $scope.editingEntry = null;
+                    $scope.originalEntryToEdit = null;
+                    
+                    $scope.updateAll();
                 }
             };
 
             // Cancel edit
             $scope.cancelEdit = function() {
                 $scope.editingEntry = null;
+                $scope.originalEntryToEdit = null;
             };
 
             // Delete entry
             $scope.deleteEntry = function(entryToDelete) {
                 if (confirm('Are you sure you want to delete this entry?')) {
-                    const index = $scope.entries.findIndex(e => e.$hashKey === entryToDelete.$hashKey);
+                    const index = $scope.entries.indexOf(entryToDelete);
                     if (index > -1) {
                         $scope.entries.splice(index, 1);
                         $scope.saveData();
@@ -357,50 +396,95 @@
 
             // Central update function
             $scope.updateAll = function() {
-                // 1. Update Filtered Entries
-                let filtered = $filter('filter')($scope.entries, {name: $scope.filters.employee, status: $scope.filters.status});
-
-                if ($scope.filters.month) {
-                    const [year, month] = $scope.filters.month.split('-');
-                    filtered = filtered.filter(entry => {
-                        const entryDate = new Date(entry.date);
-                        return entryDate.getFullYear() == year && (entryDate.getMonth() + 1) == month;
-                    });
+                // 1. Filter entries based on employee and status
+                let filtered = $scope.entries;
+                if ($scope.filters.employee) {
+                    filtered = $filter('filter')(filtered, { name: $scope.filters.employee });
+                }
+                if ($scope.filters.status) {
+                    filtered = $filter('filter')(filtered, { status: $scope.filters.status }, true);
                 }
 
-                $scope.filteredEntries = $filter('orderBy')(filtered, '-date');
-
-                // 2. Update Unique Employees
-                const employees = $scope.entries.map(entry => entry.name);
-                $scope.uniqueEmployees = [...new Set(employees)];
-
-                // 3. Update Monthly Summary & WFH Alerts
-                const summary = {};
-                const alerts = [];
-                const currentMonth = new Date().getMonth();
-                const currentYear = new Date().getFullYear();
-
-                $scope.entries.forEach(entry => {
-                    const entryDate = new Date(entry.date);
-                    if (entryDate.getMonth() === currentMonth && entryDate.getFullYear() === currentYear) {
-                        if (!summary[entry.name]) {
-                            summary[entry.name] = { H: 0, O: 0, L: 0, L1: 0, L2: 0 };
-                        }
-                        summary[entry.name][entry.status]++;
+                // Determine the month for filtering
+                let filterYear, filterMonth;
+                if ($scope.filters.month) {
+                    // ng-model for input[type=month] can be a Date object or a string
+                    const filterDate = new Date($scope.filters.month);
+                    // Check if it's a valid date
+                    if (!isNaN(filterDate.getTime())) {
+                        filterYear = filterDate.getFullYear();
+                        filterMonth = filterDate.getMonth(); // 0-indexed
                     }
+                }
+
+                // 2. Filter main table entries by month if a month is selected
+                let entriesForTable = filtered;
+                if (filterYear !== undefined && filterMonth !== undefined) {
+                    entriesForTable = entriesForTable.filter(entry => {
+                        const entryDate = new Date(entry.date);
+                        return entryDate.getFullYear() === filterYear && entryDate.getMonth() === filterMonth;
+                    });
+                }
+                $scope.filteredEntries = $filter('orderBy')(entriesForTable, '-date');
+
+                // 3. Update Unique Employees list from all entries
+                const allEmployees = $scope.entries.map(entry => entry.name);
+                $scope.uniqueEmployees = [...new Set(allEmployees)].sort();
+
+                // 4. Generate "Excel-like" Monthly Summary
+                let summaryYear, summaryMonth;
+                if (filterYear !== undefined && filterMonth !== undefined) {
+                    summaryYear = filterYear;
+                    summaryMonth = filterMonth;
+                } else {
+                    const today = new Date();
+                    summaryYear = today.getFullYear();
+                    summaryMonth = today.getMonth();
+                }
+
+                const daysInMonth = new Date(summaryYear, summaryMonth + 1, 0).getDate();
+                $scope.summaryDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+                $scope.summaryMonthYear = new Date(summaryYear, summaryMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+                const summaryGrid = {};
+                const wfhAlerts = [];
+                
+                // Use the employee/status filtered entries for the summary
+                const entriesForSummary = filtered.filter(entry => {
+                    const entryDate = new Date(entry.date);
+                    return entryDate.getFullYear() === summaryYear && entryDate.getMonth() === summaryMonth;
                 });
 
-                for (const [name, stats] of Object.entries(summary)) {
-                    if (stats.H > 8) {
-                        alerts.push({
+                const summaryEmployees = [...new Set(entriesForSummary.map(e => e.name))].sort();
+
+                summaryEmployees.forEach(name => {
+                    summaryGrid[name] = {};
+                });
+
+                let wfhCounts = {};
+
+                entriesForSummary.forEach(entry => {
+                    const day = new Date(entry.date).getDate();
+                    summaryGrid[entry.name][day] = entry.status;
+
+                    if (entry.status === 'H') {
+                        if (!wfhCounts[entry.name]) wfhCounts[entry.name] = 0;
+                        wfhCounts[entry.name]++;
+                    }
+                });
+                
+                for (const [name, count] of Object.entries(wfhCounts)) {
+                    if (count > 8) {
+                        wfhAlerts.push({
                             name: name,
-                            count: stats.H,
-                            month: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                            count: count,
+                            month: $scope.summaryMonthYear
                         });
                     }
                 }
-                $scope.monthlySummary = summary;
-                $scope.wfhAlerts = alerts;
+
+                $scope.monthlySummaryGrid = summaryGrid;
+                $scope.wfhAlerts = wfhAlerts;
             };
 
             // Watch for filter changes
