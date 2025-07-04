@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Timesheet Tracker</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/angular.js/1.8.3/angular.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-shadow {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .status-badge {
+            transition: all 0.3s ease;
+        }
+        .status-badge:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body ng-app="timesheetApp" ng-controller="TimesheetController" class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="gradient-bg text-white shadow-lg">
+        <div class="container mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold">📊 Timesheet Tracker</h1>
+                    <p class="text-blue-100 mt-1">Track your team's daily attendance</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button ng-click="exportToExcel()" class="bg-white text-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-blue-50 transition-colors">
+                        📥 Export Excel
+                    </button>
+                    <button ng-click="importFromExcel()" class="bg-blue-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-600 transition-colors">
+                        📤 Import Excel
+                    </button>
+                    <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;" onchange="angular.element(this).scope().handleFileSelect(event)">
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container mx-auto px-6 py-8">
+        <!-- Add Entry Form -->
+        <div class="bg-white rounded-xl card-shadow p-6 mb-8 animate-fade-in">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+                ✏️ Add New Entry
+            </h2>
+            
+            <form ng-submit="addEntry()" class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Employee Name</label>
+                    <input type="text" ng-model="newEntry.name" required 
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                           placeholder="Enter employee name">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                    <input type="date" ng-model="newEntry.date" required 
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <select ng-model="newEntry.status" required 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+                        <option value="">Select Status</option>
+                        <option value="H">🏠 H - Work from Home</option>
+                        <option value="O">🏢 O - Office</option>
+                        <option value="L">🏖️ L - Full Leave</option>
+                        <option value="L1">🌅 L1 - Leave First Half</option>
+                        <option value="L2">🌇 L2 - Leave Second Half</option>
+                    </select>
+                </div>
+                
+                <div class="flex items-end">
+                    <button type="submit" class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-6 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transform hover:scale-105 transition-all duration-200 shadow-lg">
+                        ➕ Add Entry
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Filters -->
+        <div class="bg-white rounded-xl card-shadow p-6 mb-8 animate-fade-in">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                🔍 Filters
+            </h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Filter by Employee</label>
+                    <select ng-model="filters.employee" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="">All Employees</option>
+                        <option ng-repeat="emp in uniqueEmployees" value="{{emp}}">{{emp}}</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Filter by Month</label>
+                    <input type="month" ng-model="filters.month" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Filter by Status</label>
+                    <select ng-model="filters.status" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="">All Status</option>
+                        <option value="H">🏠 Work from Home</option>
+                        <option value="O">🏢 Office</option>
+                        <option value="L">🏖️ Full Leave</option>
+                        <option value="L1">🌅 Leave First Half</option>
+                        <option value="L2">🌇 Leave Second Half</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- WFH Alert -->
+        <div ng-if="wfhAlerts.length > 0" class="bg-red-50 border border-red-200 rounded-xl p-4 mb-8 animate-fade-in">
+            <h3 class="text-lg font-bold text-red-800 mb-2 flex items-center">
+                ⚠️ WFH Limit Exceeded Alert
+            </h3>
+            <div class="space-y-2">
+                <div ng-repeat="alert in wfhAlerts" class="text-red-700">
+                    <strong>{{alert.name}}</strong> has <strong>{{alert.count}} WFH days</strong> in {{alert.month}} (Limit: 8 days)
+                </div>
+            </div>
+        </div>
+
+        <!-- Monthly Summary -->
+        <div class="bg-white rounded-xl card-shadow p-6 mb-8 animate-fade-in">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                📈 Monthly Summary
+            </h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div ng-repeat="(employee, stats) in monthlySummary" class="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-4 border border-blue-200">
+                    <h4 class="font-bold text-gray-800 mb-2">{{employee}}</h4>
+                    <div class="space-y-1 text-sm">
+                        <div class="flex justify-between">
+                            <span>🏠 WFH:</span>
+                            <span class="font-medium" ng-class="{'text-red-600': stats.H > 8, 'text-green-600': stats.H <= 8}">{{stats.H || 0}}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>🏢 Office:</span>
+                            <span class="font-medium text-blue-600">{{stats.O || 0}}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>🏖️ Leave:</span>
+                            <span class="font-medium text-orange-600">{{(stats.L || 0) + (stats.L1 || 0) + (stats.L2 || 0)}}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Entries Table -->
+        <div class="bg-white rounded-xl card-shadow overflow-hidden animate-fade-in">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-xl font-bold text-gray-800 flex items-center">
+                    📋 Timesheet Entries
+                    <span class="ml-3 bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded-full">
+                        {{filteredEntries.length}} entries
+                    </span>
+                </h3>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <tr ng-repeat="entry in filteredEntries track by $index" class="hover:bg-gray-50 transition-colors">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="font-medium text-gray-900">{{entry.name}}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-gray-900">{{entry.date | date:'dd/MM/yyyy'}}</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="status-badge inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+                                      ng-class="{
+                                        'bg-green-100 text-green-800': entry.status === 'H',
+                                        'bg-blue-100 text-blue-800': entry.status === 'O',
+                                        'bg-red-100 text-red-800': entry.status === 'L',
+                                        'bg-orange-100 text-orange-800': entry.status === 'L1',
+                                        'bg-yellow-100 text-yellow-800': entry.status === 'L2'
+                                      }">
+                                    <span ng-if="entry.status === 'H'">🏠 Work from Home</span>
+                                    <span ng-if="entry.status === 'O'">🏢 Office</span>
+                                    <span ng-if="entry.status === 'L'">🏖️ Full Leave</span>
+                                    <span ng-if="entry.status === 'L1'">🌅 Leave First Half</span>
+                                    <span ng-if="entry.status === 'L2'">🌇 Leave Second Half</span>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <button ng-click="editEntry(entry)" class="text-blue-600 hover:text-blue-900 mr-3 font-medium">
+                                    ✏️ Edit
+                                </button>
+                                <button ng-click="deleteEntry(entry)" class="text-red-600 hover:text-red-900 font-medium">
+                                    🗑️ Delete
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Edit Modal -->
+        <div ng-show="editingEntry" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4 animate-fade-in">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">Edit Entry</h3>
+                
+                <form ng-submit="updateEntry()">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Employee Name</label>
+                            <input type="text" ng-model="editingEntry.name" required 
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                            <input type="date" ng-model="editingEntry.date" required 
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                            <select ng-model="editingEntry.status" required 
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="H">🏠 H - Work from Home</option>
+                                <option value="O">🏢 O - Office</option>
+                                <option value="L">🏖️ L - Full Leave</option>
+                                <option value="L1">🌅 L1 - Leave First Half</option>
+                                <option value="L2">🌇 L2 - Leave Second Half</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" ng-click="cancelEdit()" class="px-4 py-2 text-gray-600 hover:text-gray-800">
+                            Cancel
+                        </button>
+                        <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
+                            Update
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        angular.module('timesheetApp', [])
+        .controller('TimesheetController', function($scope, $filter) {
+            $scope.entries = [];
+            $scope.filteredEntries = [];
+            $scope.uniqueEmployees = [];
+            $scope.monthlySummary = {};
+            $scope.wfhAlerts = [];
+
+            $scope.newEntry = {};
+            $scope.editingEntry = null;
+
+            $scope.filters = {
+                employee: '',
+                month: '',
+                status: ''
+            };
+
+            // Load data from localStorage on init
+            $scope.loadData = function() {
+                const savedData = localStorage.getItem('timesheetData');
+                if (savedData) {
+                    $scope.entries = JSON.parse(savedData);
+                    $scope.entries.forEach(entry => {
+                        entry.date = new Date(entry.date);
+                    });
+                }
+                $scope.updateAll(); // Initial calculation
+            };
+
+            // Save data to localStorage
+            $scope.saveData = function() {
+                localStorage.setItem('timesheetData', JSON.stringify($scope.entries));
+            };
+
+            // Add new entry
+            $scope.addEntry = function() {
+                if ($scope.newEntry.name && $scope.newEntry.date && $scope.newEntry.status) {
+                    $scope.entries.push({
+                        name: $scope.newEntry.name,
+                        date: new Date($scope.newEntry.date),
+                        status: $scope.newEntry.status
+                    });
+                    $scope.saveData();
+                    $scope.newEntry = {};
+                    $scope.updateAll();
+                }
+            };
+
+            // Edit entry
+            $scope.editEntry = function(entry) {
+                $scope.editingEntry = angular.copy(entry);
+            };
+
+            // Update entry
+            $scope.updateEntry = function() {
+                if ($scope.editingEntry) {
+                    const originalEntry = $scope.entries.find(e => e.$hashKey === $scope.editingEntry.$hashKey);
+                    if (originalEntry) {
+                        Object.assign(originalEntry, $scope.editingEntry);
+                        $scope.saveData();
+                        $scope.editingEntry = null;
+                        $scope.updateAll();
+                    }
+                }
+            };
+
+            // Cancel edit
+            $scope.cancelEdit = function() {
+                $scope.editingEntry = null;
+            };
+
+            // Delete entry
+            $scope.deleteEntry = function(entryToDelete) {
+                if (confirm('Are you sure you want to delete this entry?')) {
+                    const index = $scope.entries.findIndex(e => e.$hashKey === entryToDelete.$hashKey);
+                    if (index > -1) {
+                        $scope.entries.splice(index, 1);
+                        $scope.saveData();
+                        $scope.updateAll();
+                    }
+                }
+            };
+
+            // Central update function
+            $scope.updateAll = function() {
+                // 1. Update Filtered Entries
+                let filtered = $filter('filter')($scope.entries, {name: $scope.filters.employee, status: $scope.filters.status});
+
+                if ($scope.filters.month) {
+                    const [year, month] = $scope.filters.month.split('-');
+                    filtered = filtered.filter(entry => {
+                        const entryDate = new Date(entry.date);
+                        return entryDate.getFullYear() == year && (entryDate.getMonth() + 1) == month;
+                    });
+                }
+
+                $scope.filteredEntries = $filter('orderBy')(filtered, '-date');
+
+                // 2. Update Unique Employees
+                const employees = $scope.entries.map(entry => entry.name);
+                $scope.uniqueEmployees = [...new Set(employees)];
+
+                // 3. Update Monthly Summary & WFH Alerts
+                const summary = {};
+                const alerts = [];
+                const currentMonth = new Date().getMonth();
+                const currentYear = new Date().getFullYear();
+
+                $scope.entries.forEach(entry => {
+                    const entryDate = new Date(entry.date);
+                    if (entryDate.getMonth() === currentMonth && entryDate.getFullYear() === currentYear) {
+                        if (!summary[entry.name]) {
+                            summary[entry.name] = { H: 0, O: 0, L: 0, L1: 0, L2: 0 };
+                        }
+                        summary[entry.name][entry.status]++;
+                    }
+                });
+
+                for (const [name, stats] of Object.entries(summary)) {
+                    if (stats.H > 8) {
+                        alerts.push({
+                            name: name,
+                            count: stats.H,
+                            month: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                        });
+                    }
+                }
+                $scope.monthlySummary = summary;
+                $scope.wfhAlerts = alerts;
+            };
+
+            // Watch for filter changes
+            $scope.$watch('filters', $scope.updateAll, true);
+
+            // Export to Excel
+            $scope.exportToExcel = function() {
+                const ws = XLSX.utils.json_to_sheet($scope.entries.map(entry => ({
+                    'Employee Name': entry.name,
+                    'Date': entry.date.toLocaleDateString(),
+                    'Status': entry.status
+                })));
+                
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Timesheet');
+                
+                XLSX.writeFile(wb, `timesheet_${new Date().toISOString().split('T')[0]}.xlsx`);
+            };
+
+            // Import from Excel
+            $scope.importFromExcel = function() {
+                document.getElementById('fileInput').click();
+            };
+
+            // Handle file select
+            $scope.handleFileSelect = function(event) {
+                const file = event.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const sheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[sheetName];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                        
+                        jsonData.forEach(row => {
+                            if (row['Employee Name'] && row['Date'] && row['Status']) {
+                                $scope.entries.push({
+                                    name: row['Employee Name'],
+                                    date: new Date(row['Date']),
+                                    status: row['Status']
+                                });
+                            }
+                        });
+                        
+                        $scope.saveData();
+                        $scope.$apply(function(){
+                            $scope.updateAll();
+                        });
+                    };
+                    reader.readAsArrayBuffer(file);
+                }
+            };
+
+            // Initialize
+            $scope.loadData();
+        });
+    </script>
+</body>
+</html>
