@@ -2,9 +2,43 @@
 
 This document provides instructions on how to use the Timesheet Tracker application.
 
-## Opening the Application
+## Getting Started
 
-To use the application, simply open the `timesheet_app.html` file in your web browser.
+This project offers two ways to run the Timesheet Tracker application:
+
+### 1. Single-File Application (timesheet_app.html)
+
+This is a standalone HTML file that provides basic timesheet tracking functionality. It's simple to use and requires no setup.
+
+**To run:**
+
+1.  Locate the `timesheet_app.html` file in the project root.
+2.  Open the file directly in your web browser (e.g., by double-clicking it).
+
+This option is suitable if you need a quick and simple timesheet solution without any development environment setup.
+
+### 2. Robust Angular Application (timesheet-angular)
+
+This is a more feature-rich and extensible application built with Angular. It provides a robust foundation for adding more features and is recommended for development and customization.
+
+**To run:**
+
+1.  **Navigate to the Angular project directory:**
+    ```bash
+    cd timesheet-angular
+    ```
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+    (You only need to do this once, or if `package.json` changes.)
+3.  **Start the development server:**
+    ```bash
+    npm start
+    ```
+    This will compile the application and open it in your default web browser, usually at `http://localhost:4200/`.
+
+This option is ideal if you plan to extend the application, contribute to its development, or require a more scalable solution.
 
 ## Features
 

@@ -1,0 +1,245 @@
+<!-- Header -->
+<header class="gradient-bg text-white shadow-lg">
+    <div class="container mx-auto px-6 py-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold">📊 Timesheet Tracker</h1>
+                <p class="text-blue-100 mt-1">Track your team's daily attendance</p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button (click)="exportToExcel()" class="bg-white text-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-blue-50 transition-colors">
+                    📥 Export Excel
+                </button>
+                <button (click)="importFromExcel()" class="bg-blue-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-600 transition-colors">
+                    📤 Import Excel
+                </button>
+                <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;" (change)="handleFileSelect($event)">
+            </div>
+        </div>
+    </div>
+</header>
+
+<div class="container mx-auto px-6 py-8">
+    <!-- Add Entry Form -->
+    <div class="bg-white rounded-xl card-shadow p-6 mb-8 animate-fade-in">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+            ✏️ Add New Entry
+        </h2>
+        
+        <form (ngSubmit)="addEntry()" class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Employee Name</label>
+                <input type="text" [(ngModel)]="newEntry.name" name="name" required 
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                       placeholder="Enter employee name">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                <input type="date" [(ngModel)]="newEntry.date" name="date" required 
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                <select [(ngModel)]="newEntry.status" name="status" required 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all">
+                    <option value="">Select Status</option>
+                    <option value="H">🏠 H - Work from Home</option>
+                    <option value="O">🏢 O - Office</option>
+                    <option value="L">🏖️ L - Full Leave</option>
+                    <option value="L1">🌅 L1 - Leave First Half</option>
+                    <option value="L2">🌇 L2 - Leave Second Half</option>
+                </select>
+            </div>
+            
+            <div class="flex items-end">
+                <button type="submit" class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-6 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transform hover:scale-105 transition-all duration-200 shadow-lg">
+                    ➕ Add Entry
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-xl card-shadow p-6 mb-8 animate-fade-in">
+        <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+            🔍 Filters
+        </h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Filter by Employee</label>
+                <select [(ngModel)]="filters.employee" (ngModelChange)="updateAll()" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="">All Employees</option>
+                    <option *ngFor="let emp of uniqueEmployees" [value]="emp">{{emp}}</option>
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Filter by Month</label>
+                <input type="month" [(ngModel)]="filters.month" (ngModelChange)="updateAll()" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Filter by Status</label>
+                <select [(ngModel)]="filters.status" (ngModelChange)="updateAll()" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="">All Status</option>
+                    <option value="H">🏠 Work from Home</option>
+                    <option value="O">🏢 Office</option>
+                    <option value="L">🏖️ Full Leave</option>
+                    <option value="L1">🌅 Leave First Half</option>
+                    <option value="L2">🌇 Leave Second Half</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- WFH Alert -->
+    <div *ngIf="wfhAlerts.length > 0" class="bg-red-50 border border-red-200 rounded-xl p-4 mb-8 animate-fade-in">
+        <h3 class="text-lg font-bold text-red-800 mb-2 flex items-center">
+            ⚠️ WFH Limit Exceeded Alert
+        </h3>
+        <div class="space-y-2">
+            <div *ngFor="let alert of wfhAlerts" class="text-red-700">
+                <strong>{{alert.name}}</strong> has <strong>{{alert.count}} WFH days</strong> in {{alert.month}} (Limit: 8 days)
+            </div>
+        </div>
+    </div>
+
+    <!-- Monthly Summary -->
+    <div class="bg-white rounded-xl card-shadow p-6 mb-8 animate-fade-in">
+        <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+            📈 Monthly Summary for {{ summaryMonthYear }}
+        </h3>
+        <div class="overflow-x-auto">
+            <table class="w-full border-collapse text-center text-sm">
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th class="px-2 py-2 border text-left text-xs font-medium text-gray-600 uppercase sticky left-0 bg-gray-100 z-10">Employee</th>
+                        <th *ngFor="let day of summaryDays" class="px-2 py-2 border text-xs font-medium text-gray-600 w-10">{{day}}</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white">
+                    <tr *ngFor="let name of getObjectKeys(monthlySummaryGrid)" class="hover:bg-gray-50">
+                        <td class="px-2 py-2 border text-left font-medium text-gray-800 whitespace-nowrap sticky left-0 bg-white hover:bg-gray-50 z-10">{{name}}</td>
+                        <td *ngFor="let day of summaryDays" class="px-2 py-2 border">
+                            <span class="font-bold" [ngClass]="{
+                                'text-green-700': monthlySummaryGrid[name][day] === 'H',
+                                'text-blue-700': monthlySummaryGrid[name][day] === 'O',
+                                'text-red-700': monthlySummaryGrid[name][day] === 'L',
+                                'text-orange-700': monthlySummaryGrid[name][day] === 'L1',
+                                'text-yellow-800': monthlySummaryGrid[name][day] === 'L2'
+                            }">
+                                {{monthlySummaryGrid[name][day]}}
+                            </span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Entries Table -->
+    <div class="bg-white rounded-xl card-shadow overflow-hidden animate-fade-in">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-xl font-bold text-gray-800 flex items-center">
+                📋 Timesheet Entries
+                <span class="ml-3 bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded-full">
+                    {{filteredEntries.length}} entries
+                </span>
+            </h3>
+        </div>
+        
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <tr *ngFor="let entry of filteredEntries; let i = index" class="hover:bg-gray-50 transition-colors">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="font-medium text-gray-900">{{entry.name}}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-gray-900">{{entry.date | date:'dd/MM/yyyy'}}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="status-badge inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+                                  [ngClass]="{
+                                    'bg-green-100 text-green-800': entry.status === 'H',
+                                    'bg-blue-100 text-blue-800': entry.status === 'O',
+                                    'bg-red-100 text-red-800': entry.status === 'L',
+                                    'bg-orange-100 text-orange-800': entry.status === 'L1',
+                                    'bg-yellow-100 text-yellow-800': entry.status === 'L2'
+                                  }">
+                                <span *ngIf="entry.status === 'H'">🏠 Work from Home</span>
+                                <span *ngIf="entry.status === 'O'">🏢 Office</span>
+                                <span *ngIf="entry.status === 'L'">🏖️ Full Leave</span>
+                                <span *ngIf="entry.status === 'L1'">🌅 Leave First Half</span>
+                                <span *ngIf="entry.status === 'L2'">🌇 Leave Second Half</span>
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <button (click)="editEntry(entry)" class="text-blue-600 hover:text-blue-900 mr-3 font-medium">
+                                ✏️ Edit
+                            </button>
+                            <button (click)="deleteEntry(entry)" class="text-red-600 hover:text-red-900 font-medium">
+                                🗑️ Delete
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div *ngIf="editingEntry" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4 animate-fade-in">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">Edit Entry</h3>
+            
+            <form (ngSubmit)="updateEntry()">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Employee Name</label>
+                        <input type="text" [(ngModel)]="editingEntry.name" name="edit-name" required 
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                        <input type="date" [(ngModel)]="editingEntry.date" name="edit-date" required 
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                        <select [(ngModel)]="editingEntry.status" name="edit-status" required 
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="H">🏠 H - Work from Home</option>
+                            <option value="O">🏢 O - Office</option>
+                            <option value="L">🏖️ L - Full Leave</option>
+                            <option value="L1">🌅 L1 - Leave First Half</option>
+                            <option value="L2">🌇 L2 - Leave Second Half</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" (click)="cancelEdit()" class="px-4 py-2 text-gray-600 hover:text-gray-800">
+                        Cancel
+                    </button>
+                    <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
+                        Update
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
