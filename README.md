@@ -8,7 +8,7 @@ This project offers two ways to run the Timesheet Tracker application:
 
 ### 1. Single-File Application (timesheet_app.html)
 
-This is a standalone HTML file that provides basic timesheet tracking functionality. It's simple to use and requires no setup.
+This is a standalone HTML file that provides a monthly, editable, grid-based timesheet. It's simple to use and requires no setup.
 
 **To run:**
 
@@ -40,64 +40,60 @@ This is a more feature-rich and extensible application built with Angular. It pr
 
 This option is ideal if you plan to extend the application, contribute to its development, or require a more scalable solution.
 
-## Features
+## Features of Single-File Application (timesheet_app.html)
 
-### Adding a New Timesheet Entry
 
-1.  **Employee Name:** Enter the name of the employee.
-2.  **Date:** Select the date for the entry.
-3.  **Status:** Choose the employee's status from the dropdown menu:
-    *   **H - Work from Home**
-    *   **O - Office**
-    *   **L - Full Leave**
-    *   **L1 - Leave First Half**
-    *   **L2 - Leave Second Half**
-4.  Click the **Add Entry** button to add the new record to the timesheet.
+### Monthly Summary View
 
-### Viewing Timesheet Entries
+The application now presents a single, Excel-like monthly grid. Each row represents an employee for the selected month.
 
-All timesheet entries are displayed in a table at the bottom of the page.
+### Adding a New Employee
 
-### Editing an Entry
+1.  Enter the employee's name in the "Add New Employee" field. Names must be unique.
+2.  Click the **Add Employee** button. The new employee will appear as a new row in the summary grid.
+3.  **Enhanced Logic**: If an employee with the same name already exists (even if previously deleted or with a future start month), their `startMonth` will be updated to the current month, and they will be re-activated if necessary.
 
-1.  Locate the entry you want to edit in the timesheet table.
-2.  Click the **Edit** button in the "Actions" column for that entry.
-3.  An "Edit Entry" window will appear.
-4.  Make the necessary changes to the employee's name, date, or status.
-5.  Click the **Update** button to save the changes.
+### Deleting an Employee
 
-### Deleting an Entry
+1.  Click the "🗑️" icon next to the employee's name in the summary grid.
+2.  Confirm the deletion. This will remove the employee and all their associated timesheet data.
 
-1.  Locate the entry you want to delete in the timesheet table.
-2.  Click the **Delete** button in the "Actions" column for that entry.
-3.  A confirmation dialog will appear. Click **OK** to permanently delete the entry.
+### Editing Timesheet Entries
 
-### Filtering Entries
+Directly in the monthly summary grid, click on any day's cell for an employee to select a status from the dropdown:
+*   **H - Work from Home**
+*   **O - Office**
+*   **L - Full Leave**
+*   **L1 - Leave First Half**
+*   **L2 - Leave Second Half**
 
-You can filter the timesheet entries using the following filters:
+Changes are saved automatically.
 
-*   **Filter by Employee:** Select an employee's name from the dropdown to view only their entries.
-*   **Filter by Month:** Choose a month to see all entries for that specific month.
-*   **Filter by Status:** Select a status to view all entries with that status.
+### Filtering by Month
 
-### Monthly Summary
+Use the "Filter by Month" input to select the month you want to view or edit. Employee names are automatically carried forward to the new month.
+*   **Clear Filter**: Clearing the month input (e.g., by clicking the 'x' icon in some browsers) will reset the filter to the current month.
 
-The "Monthly Summary" section provides a quick overview of each employee's work status for the current month, including the number of days they have worked from home, been in the office, or taken leave.
+### Color-Coded WFH Summary
+
+The "WFH Days" column shows the total number of Work from Home days for each employee in the selected month. The count is color-coded:
+*   **Blue:** 1-8 WFH days
+*   **Red:** More than 8 WFH days
 
 ### Work from Home (WFH) Alerts
 
-The application will display an alert if an employee has exceeded the maximum limit of 8 Work from Home days in the current month.
+An alert will be displayed at the top of the page if any employee exceeds the 8-day WFH limit for the selected month.
 
 ### Exporting to Excel
 
-Click the **Export Excel** button to download the entire timesheet as an Excel file. The file will be named `timesheet_YYYY-MM-DD.xlsx`.
+Click the **Export Excel** button to download the current month's timesheet as an Excel file.
 
 ### Importing from Excel
 
 1.  Click the **Import Excel** button.
-2.  Select an Excel file from your computer. The file should have the following columns: "Employee Name", "Date", and "Status".
-3.  The data from the Excel file will be added to the timesheet.
+2.  Select an Excel file. The file should have "Employee Name", "Date", and "Status" columns.
+3.  The data will be imported. New employees will be added, and their `startMonth` will be set to the earliest month found in the imported data, ensuring they only appear from that month onwards. Existing employees will have their `startMonth` updated if the imported data indicates an earlier start.
 
 ### Data Persistence
 
-The application automatically saves all timesheet data in your browser's local storage. This means that your data will be available even if you close the browser or restart your computer. But it won't be available in if cache is cleared or used in different browser, So its recommended to Export after each use and Import the excel again before using it.
+All data is saved in your browser's local storage, so it persists between sessions. It is recommended to export your data periodically as a backup.
