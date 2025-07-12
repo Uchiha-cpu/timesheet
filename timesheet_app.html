@@ -93,14 +93,6 @@
             </div>
         </div>
 
-        <!-- WFH Alert -->
-        <div ng-if="wfhAlerts.length > 0" class="bg-red-50 border border-red-200 rounded-xl p-4 mb-8 animate-fade-in">
-            <h3 class="text-lg font-bold text-red-800 mb-2">⚠️ WFH Limit Exceeded</h3>
-            <div ng-repeat="alert in wfhAlerts" class="text-red-700">
-                <strong>{{alert.name}}</strong> has <strong>{{alert.count}} WFH days</strong> in {{alert.month}} (Limit: 8 days).
-            </div>
-        </div>
-
         <!-- Monthly Timesheet Grid -->
         <div class="bg-white rounded-xl card-shadow p-6 animate-fade-in">
             <h3 class="text-2xl font-bold text-gray-800 mb-4">📈 Monthly Summary for {{ summaryMonthYear }}</h3>
@@ -114,9 +106,12 @@
                 <table class="w-full border-collapse text-center text-sm">
                     <thead class="bg-gray-100">
                         <tr>
-                            <th class="px-2 py-2 border text-left text-xs font-medium text-gray-600 uppercase sticky left-0 bg-gray-100 z-10 w-48">Employee</th>
-                            <th ng-repeat="day in summaryDays" class="px-2 py-2 border text-xs font-medium text-gray-600 w-12">{{day}}</th>
-                            <th class="px-2 py-2 border text-xs font-medium text-gray-600">WFH Days</th>
+                            <th class="px-2 py-2 border text-left text-xs font-medium text-gray-600 uppercase sticky left-0 bg-gray-100 z-10 w-48" rowspan="2">Employee</th>
+                            <th ng-repeat="day in summaryDays" class="px-2 py-2 border text-xs font-medium text-gray-600 w-12" ng-class="{'bg-gray-200 text-gray-500': isWeekend(day)}">{{day}}</th>
+                            <th class="px-2 py-2 border text-xs font-medium text-gray-600" rowspan="2">WFH Days</th>
+                        </tr>
+                        <tr>
+                            <th ng-repeat="day in summaryDays" class="px-2 py-1 border text-xs font-bold w-12" ng-class="{'bg-gray-200 text-gray-500': isWeekend(day)}">{{getDayName(day)}}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -125,8 +120,8 @@
                                 <input type="text" ng-model="employee.name" ng-focus="setOriginalName(employee.name)" ng-blur="updateEmployeeName(employee, originalName)" class="border-none bg-transparent w-full">
                                 <button ng-click="deleteEmployee(employee.name)" class="text-red-500 hover:text-red-700 ml-4">🗑️</button>
                             </td>
-                            <td ng-repeat="day in summaryDays" class="px-1 py-0 border" ng-class="{'wfh-blue': getStatus(employee.name, day) === 'H', 'office-green': getStatus(employee.name, day) === 'O', 'leave-red': getStatus(employee.name, day) === 'L', 'leave-half-orange': getStatus(employee.name, day) === 'L1' || getStatus(employee.name, day) === 'L2'}">
-                                <select ng-model="entries[getEntryKey(employee.name, day)].status" ng-change="updateEntry(employee.name, day, entries[getEntryKey(employee.name, day)].status)" class="status-select">
+                            <td ng-repeat="day in summaryDays" class="px-1 py-0 border" ng-class="{'bg-gray-200': isWeekend(day) && !getStatus(employee.name, day), 'wfh-blue': getStatus(employee.name, day) === 'H', 'office-green': getStatus(employee.name, day) === 'O', 'leave-red': getStatus(employee.name, day) === 'L', 'leave-half-orange': getStatus(employee.name, day) === 'L1' || getStatus(employee.name, day) === 'L2'}">
+                                <select ng-model="entries[getEntryKey(employee.name, day)].status" ng-change="updateEntry(employee.name, day, entries[getEntryKey(employee.name, day)].status)" class="status-select" ng-class="{'bg-gray-200': isWeekend(day) && !getStatus(employee.name, day)}">
                                     <option value=""></option>
                                     <option value="H">H</option>
                                     <option value="O">O</option>
@@ -152,7 +147,6 @@
             $scope.entries = {}; // Store entries as an object: { 'name_date': {status} }
             $scope.summaryDays = [];
             $scope.summaryMonthYear = '';
-            $scope.wfhAlerts = [];
             $scope.newEmployeeName = '';
             $scope.filters = { month: '' };
 
@@ -315,7 +309,6 @@
                     });
                 });
                 
-                $scope.calculateWfhAlerts();
             };
 
             // Update or create an entry when a status is selected in the grid
@@ -323,7 +316,6 @@
                 const key = $scope.getEntryKey(name, day);
                 $scope.entries[key] = { status: status };
                 $scope.saveData();
-                $scope.calculateWfhAlerts();
             };
 
             // Helper to get the status for a cell
@@ -342,7 +334,22 @@
                 return name + '_' + dateStr;
             };
 
-            // Calculate WFH counts and alerts
+            $scope.getDayName = function(day) {
+                const year = $scope.filters.month.getFullYear();
+                const month = $scope.filters.month.getMonth();
+                const date = new Date(year, month, day);
+                return date.toLocaleDateString('en-US', { weekday: 'short' }).charAt(0);
+            };
+
+            $scope.isWeekend = function(day) {
+                const year = $scope.filters.month.getFullYear();
+                const month = $scope.filters.month.getMonth();
+                const date = new Date(year, month, day);
+                const dayOfWeek = date.getDay();
+                return dayOfWeek === 0 || dayOfWeek === 6; // 0 = Sunday, 6 = Saturday
+            };
+
+            // Calculate WFH counts
             $scope.getWfhCount = function(name) {
                 let count = 0;
                 $scope.summaryDays.forEach(day => {
@@ -351,20 +358,6 @@
                     }
                 });
                 return count;
-            };
-
-            $scope.calculateWfhAlerts = function() {
-                $scope.wfhAlerts = [];
-                $scope.employees.forEach(emp => {
-                    const count = $scope.getWfhCount(emp.name);
-                    if (count > 7) {
-                        $scope.wfhAlerts.push({
-                            name: emp.name,
-                            count: count,
-                            month: $scope.summaryMonthYear
-                        });
-                    }
-                });
             };
 
             // Export data to Excel

@@ -80,9 +80,9 @@ The "WFH Days" column shows the total number of Work from Home days for each emp
 *   **Blue:** 1-8 WFH days
 *   **Red:** More than 8 WFH days
 
-### Work from Home (WFH) Alerts
+### Day Name and Weekend Highlighting
 
-An alert will be displayed at the top of the page if any employee exceeds the 8-day WFH limit for the selected month.
+The timesheet grid now displays the initial of the day of the week (M, T, W, T, F, S, S) below each date. Saturdays and Sundays are visually distinguished with a grey background to indicate non-working days. Employees can still make entries on these days if needed.
 
 ### Exporting to Excel
 
