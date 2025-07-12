@@ -2,6 +2,10 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import * as XLSX from 'xlsx';
+import { EmployeeService } from '../services/employee.service';
+import { TimesheetEntryService } from '../services/timesheet-entry.service';
+import { TimesheetEntry } from '../models/timesheet-entry.model';
+import { Employee } from '../models/employee.model';
 
 @Component({
   selector: 'app-timesheet',
@@ -11,25 +15,30 @@ import * as XLSX from 'xlsx';
   imports: [CommonModule, FormsModule]
 })
 export class TimesheetComponent implements OnInit {
-  entries: any[] = [];
-  filteredEntries: any[] = [];
-  uniqueEmployees: string[] = [];
+  entries: TimesheetEntry[] = [];
+  filteredEntries: TimesheetEntry[] = [];
   monthlySummaryGrid: any = {};
   summaryDays: number[] = [];
   summaryMonthYear: string = '';
   wfhAlerts: any[] = [];
 
-  newEntry: any = {};
-  editingEntry: any = null;
-  originalEntryToEdit: any = null;
+  isLoading: boolean = false;
+  toast: { show: boolean; message: string; type: 'success' | 'error' } = { show: false, message: '', type: 'success' };
+
+  showDeleteConfirmModal: boolean = false;
+  entryToDelete: TimesheetEntry | null = null;
+
+  newEntry: TimesheetEntry = { name: '', date: '', status: '' };
+  editingEntry: TimesheetEntry | null = null;
+  originalEntryToEdit: TimesheetEntry | null = null;
 
   filters: any = {
-    employee: '',
     month: '',
-    status: ''
+    status: '',
+    name: ''
   };
 
-  constructor() {
+  constructor(private employeeService: EmployeeService, private timesheetEntryService: TimesheetEntryService) {
     this.editingEntry = null; // Ensure it's null on construction
   }
 
@@ -43,54 +52,35 @@ export class TimesheetComponent implements OnInit {
     return obj ? Object.keys(obj).sort() : [];
   }
 
+  showToast(message: string, type: 'success' | 'error'): void {
+    this.toast.show = true;
+    this.toast.message = message;
+    this.toast.type = type;
+    setTimeout(() => {
+      this.toast.show = false;
+    }, 3000); // Hide after 3 seconds
+  }
+
   loadData(): void {
-    const savedData = localStorage.getItem('timesheetData');
-    if (savedData) {
-      this.entries = JSON.parse(savedData);
-      this.entries.forEach(entry => {
-        // Ensure date is always a YYYY-MM-DD string for consistency
-        if (typeof entry.date === 'string') {
-          // If it's a full ISO string (e.g., "2025-07-04T00:00:00.000Z"), extract YYYY-MM-DD
-          if (entry.date.includes('T')) {
-            entry.date = entry.date.split('T')[0];
-          }
-          // If it's already YYYY-MM-DD, leave it as is
-        } else if (entry.date instanceof Date) {
-          // If it's a Date object (shouldn't happen if saved as string, but for safety)
-          entry.date = entry.date.toISOString().split('T')[0];
-        }
-      });
-    }
+    this.entries = this.timesheetEntryService.getEntries();
     this.updateAll();
   }
 
   saveData(): void {
-    localStorage.setItem('timesheetData', JSON.stringify(this.entries));
+    // Data is saved within the TimesheetEntryService methods
   }
 
   addEntry(): void {
     if (this.newEntry.name && this.newEntry.date && this.newEntry.status) {
-      const newEntryDateString = this.newEntry.date; // YYYY-MM-DD string from input
-
-      const isDuplicate = this.entries.some(entry => {
-        const existingDateString = (entry.date instanceof Date) ? entry.date.toISOString().split('T')[0] : entry.date;
-        return entry.name === this.newEntry.name &&
-               existingDateString === newEntryDateString;
-      });
-
-      if (isDuplicate) {
-        alert('Error: An entry for ' + this.newEntry.name + ' on ' + newEntryDateString + ' already exists.');
-        return;
+      this.isLoading = true;
+      if (this.timesheetEntryService.addEntry(this.newEntry)) {
+        this.newEntry = { name: '', date: '', status: '' };
+        this.loadData(); // Reload data after adding
+        this.showToast('Entry added successfully!', 'success');
+      } else {
+        this.showToast('Failed to add entry. It might already exist.', 'error');
       }
-
-      this.entries.push({
-        name: this.newEntry.name,
-        date: newEntryDateString, // Store as YYYY-MM-DD string
-        status: this.newEntry.status
-      });
-      this.saveData();
-      this.newEntry = {};
-      this.updateAll();
+      this.isLoading = false;
     }
   }
 
@@ -99,7 +89,9 @@ export class TimesheetComponent implements OnInit {
       this.originalEntryToEdit = entry;
       this.editingEntry = { ...entry };
       // Ensure date is a YYYY-MM-DD string for the date input
-      this.editingEntry.date = (entry.date instanceof Date) ? entry.date.toISOString().split('T')[0] : entry.date;
+      if (this.editingEntry) {
+        this.editingEntry.date = entry.date;
+      }
     } else {
       console.warn('Attempted to edit a null or undefined entry.');
       this.cancelEdit(); // Ensure modal is closed if invalid entry is passed
@@ -109,40 +101,19 @@ export class TimesheetComponent implements OnInit {
   updateEntry(): void {
     if (!this.editingEntry || !this.originalEntryToEdit) {
       console.error('Attempted to update without a valid editingEntry or originalEntryToEdit.');
+      this.showToast('Error: Invalid entry for update.', 'error');
       return;
     }
 
-    // Basic validation for required fields
-    if (!this.editingEntry.name || !this.editingEntry.date || !this.editingEntry.status) {
-      alert('Error: All fields (Name, Date, Status) are required for update.');
-      return;
+    this.isLoading = true;
+    if (this.timesheetEntryService.updateEntry(this.originalEntryToEdit, this.editingEntry)) {
+      this.cancelEdit();
+      this.loadData(); // Reload data after updating
+      this.showToast('Entry updated successfully!', 'success');
+    } else {
+      this.showToast('Failed to update entry. It might already exist.', 'error');
     }
-
-    const updatedEntryDateString = this.editingEntry.date; // YYYY-MM-DD string from input
-
-    // Check for duplicate entries, excluding the original entry being edited
-    const isDuplicate = this.entries.some(entry => {
-      const existingDateString = (entry.date instanceof Date) ? entry.date.toISOString().split('T')[0] : entry.date;
-      return entry !== this.originalEntryToEdit && // Exclude the original entry
-             entry.name === this.editingEntry.name &&
-             existingDateString === updatedEntryDateString;
-    });
-
-    if (isDuplicate) {
-      alert('Error: An entry for ' + this.editingEntry.name + ' on ' + updatedEntryDateString + ' already exists.');
-      return;
-    }
-
-    // Update the original entry with the edited values
-    Object.assign(this.originalEntryToEdit, {
-      name: this.editingEntry.name,
-      date: updatedEntryDateString, // Store as YYYY-MM-DD string
-      status: this.editingEntry.status
-    });
-
-    this.saveData();
-    this.cancelEdit(); // Close modal and reset editing state
-    this.updateAll();
+    this.isLoading = false;
   }
 
   cancelEdit(): void {
@@ -150,24 +121,44 @@ export class TimesheetComponent implements OnInit {
     this.originalEntryToEdit = null;
   }
 
-  deleteEntry(entryToDelete: any): void {
-    if (confirm('Are you sure you want to delete this entry?')) {
-      const index = this.entries.indexOf(entryToDelete);
-      if (index > -1) {
-        this.entries.splice(index, 1);
-        this.saveData();
-        this.updateAll();
-      }
+  confirmDelete(): void {
+    if (this.entryToDelete) {
+      this.isLoading = true;
+      this.timesheetEntryService.deleteEntry(this.entryToDelete);
+      this.loadData();
+      this.showToast('Entry deleted successfully!', 'success');
+      this.isLoading = false;
     }
+    this.showDeleteConfirmModal = false;
+    this.entryToDelete = null;
+  }
+
+  cancelDelete(): void {
+    this.showDeleteConfirmModal = false;
+    this.entryToDelete = null;
+  }
+
+  clearFilter(filterType: 'employee' | 'month' | 'status' | 'name'): void {
+    this.filters[filterType] = '';
+    this.updateAll();
+  }
+
+  deleteEntry(entryToDelete: TimesheetEntry): void {
+    this.entryToDelete = entryToDelete;
+    this.showDeleteConfirmModal = true;
   }
 
   updateAll(): void {
+    this.entries = this.timesheetEntryService.getEntries();
     let filtered = this.entries;
-    if (this.filters.employee) {
-      filtered = filtered.filter(entry => entry.name === this.filters.employee);
-    }
+
     if (this.filters.status) {
       filtered = filtered.filter(entry => entry.status === this.filters.status);
+    }
+
+    if (this.filters.name) {
+      const searchName = this.filters.name.toLowerCase();
+      filtered = filtered.filter(entry => entry.name.toLowerCase().includes(searchName));
     }
 
     let filterYear: number | undefined, filterMonth: number | undefined;
@@ -195,8 +186,9 @@ export class TimesheetComponent implements OnInit {
       return 0;
     });
 
-    const allEmployees = this.entries.map(entry => entry.name);
-    this.uniqueEmployees = [...new Set(allEmployees)].sort();
+    // Get unique employees from the EmployeeService, considering deleted status
+    const allActiveEmployees = this.employeeService.getEmployees().filter(emp => !emp.deletedMonth);
+    
 
     let summaryYear: number, summaryMonth: number;
     if (filterYear !== undefined && filterMonth !== undefined) {
@@ -255,16 +247,26 @@ export class TimesheetComponent implements OnInit {
   }
 
   exportToExcel(): void {
-    const ws = XLSX.utils.json_to_sheet(this.entries.map(entry => ({
-      'Employee Name': entry.name,
-      'Date': entry.date.toLocaleDateString(),
-      'Status': entry.status
-    })));
+    this.isLoading = true;
+    try {
+      const dataToExport = this.timesheetEntryService.getEntries().map(entry => ({
+        'Employee Name': entry.name,
+        'Date': entry.date, // Already YYYY-MM-DD string
+        'Status': entry.status
+      }));
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Timesheet');
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Timesheet');
 
-    XLSX.writeFile(wb, `timesheet_${new Date().toISOString().split('T')[0]}.xlsx`);
+      XLSX.writeFile(wb, `timesheet_${new Date().toISOString().split('T')[0]}.xlsx`);
+      this.showToast('Data exported to Excel successfully!', 'success');
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      this.showToast('Failed to export data to Excel.', 'error');
+    } finally {
+      this.isLoading = false;
+    }
   }
 
   importFromExcel(): void {
@@ -274,26 +276,41 @@ export class TimesheetComponent implements OnInit {
   handleFileSelect(event: any): void {
     const file = event.target.files[0];
     if (file) {
+      this.isLoading = true;
       const reader = new FileReader();
       reader.onload = (e: any) => {
-        const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
 
-        jsonData.forEach(row => {
-          if (row['Employee Name'] && row['Date'] && row['Status']) {
-            this.entries.push({
-              name: row['Employee Name'],
-              date: new Date(row['Date']).toISOString().split('T')[0], // Convert to YYYY-MM-DD string
-              status: row['Status']
-            });
-          }
-        });
+          const importedEmployees: Employee[] = [];
+          jsonData.forEach((row: any) => {
+            if (row['Employee Name'] && row['Date'] && row['Status']) {
+              const entryDate = new Date(row['Date']);
+              const dateStr = entryDate.toISOString().split('T')[0];
+              const startMonth = dateStr.substring(0, 7);
 
-        this.saveData();
-        this.updateAll();
+              importedEmployees.push({ name: row['Employee Name'], startMonth: startMonth });
+
+              this.timesheetEntryService.addEntry({
+                name: row['Employee Name'],
+                date: dateStr,
+                status: row['Status']
+              });
+            }
+          });
+          this.employeeService.importEmployees(importedEmployees);
+          this.loadData();
+          this.showToast('Data imported from Excel successfully!', 'success');
+        } catch (error) {
+          console.error('Error importing from Excel:', error);
+          this.showToast('Failed to import data from Excel.', 'error');
+        } finally {
+          this.isLoading = false;
+        }
       };
       reader.readAsArrayBuffer(file);
     }
