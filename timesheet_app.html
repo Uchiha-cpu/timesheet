@@ -41,6 +41,24 @@
         .office-green { background-color: #48bb78; color: #ffffff; }
         .leave-red { background-color: #f56565; color: #ffffff; }
         .leave-half-orange { background-color: #ed8936; color: #ffffff; }
+        .truncate-text {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .resizer {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 5px;
+            height: 100%;
+            background: transparent;
+            cursor: col-resize;
+            z-index: 20;
+        }
+        .resizer:hover {
+            background: rgba(0, 0, 0, 0.1);
+        }
     </style>
 </head>
 <body ng-app="timesheetApp" ng-controller="TimesheetController" class="bg-gray-50 min-h-screen">
@@ -97,27 +115,30 @@
         <div class="bg-white rounded-xl card-shadow p-6 animate-fade-in">
             <h3 class="text-2xl font-bold text-gray-800 mb-4">📈 Monthly Summary for {{ summaryMonthYear }}</h3>
             <div class="flex space-x-4 mb-4">
-                <div class="flex items-center"><div class="w-4 h-4 mr-2 wfh-blue"></div><span>H - Work from Home</span></div>
-                <div class="flex items-center"><div class="w-4 h-4 mr-2 office-green"></div><span>O - Office</span></div>
-                <div class="flex items-center"><div class="w-4 h-4 mr-2 leave-red"></div><span>L - Full Leave</span></div>
-                <div class="flex items-center"><div class="w-4 h-4 mr-2 leave-half-orange"></div><span>L1/L2 - Half Leave</span></div>
+                <div class="flex items-center cursor-pointer p-2 rounded-lg transition-all" ng-click="setStatusFilter('H')" ng-class="{'bg-blue-100 ring-2 ring-blue-500': activeStatusFilter === 'H', 'opacity-60 hover:opacity-100': activeStatusFilter && activeStatusFilter !== 'H'}"><div class="w-4 h-4 mr-2 wfh-blue"></div><span>H - Work from Home</span></div>
+                <div class="flex items-center cursor-pointer p-2 rounded-lg transition-all" ng-click="setStatusFilter('O')" ng-class="{'bg-green-100 ring-2 ring-green-500': activeStatusFilter === 'O', 'opacity-60 hover:opacity-100': activeStatusFilter && activeStatusFilter !== 'O'}"><div class="w-4 h-4 mr-2 office-green"></div><span>O - Office</span></div>
+                <div class="flex items-center cursor-pointer p-2 rounded-lg transition-all" ng-click="setStatusFilter('L')" ng-class="{'bg-red-100 ring-2 ring-red-500': activeStatusFilter === 'L', 'opacity-60 hover:opacity-100': activeStatusFilter && activeStatusFilter !== 'L'}"><div class="w-4 h-4 mr-2 leave-red"></div><span>L - Full Leave</span></div>
+                <div class="flex items-center cursor-pointer p-2 rounded-lg transition-all" ng-click="setStatusFilter('L1L2')" ng-class="{'bg-orange-100 ring-2 ring-orange-500': activeStatusFilter === 'L1L2', 'opacity-60 hover:opacity-100': activeStatusFilter && activeStatusFilter !== 'L1L2'}"><div class="w-4 h-4 mr-2 leave-half-orange"></div><span>L1/L2 - Half Leave</span></div>
             </div>
-            <div class="overflow-x-auto">
+            <div class="">
                 <table class="w-full border-collapse text-center text-sm">
                     <thead class="bg-gray-100">
                         <tr>
-                            <th class="px-2 py-2 border text-left text-xs font-medium text-gray-600 uppercase sticky left-0 bg-gray-100 z-10 w-48" rowspan="2">Employee</th>
+                            <th class="px-2 py-2 border text-left text-xs font-medium text-gray-600 uppercase sticky left-0 bg-gray-100 z-10 w-48 relative" rowspan="2" column-resizer>Employee
+                                <div class="resizer"></div>
+                            </th>
                             <th ng-repeat="day in summaryDays" class="px-2 py-2 border text-xs font-medium text-gray-600 w-12" ng-class="{'bg-gray-200 text-gray-500': isWeekend(day)}">{{day}}</th>
                             <th class="px-2 py-2 border text-xs font-medium text-gray-600" rowspan="2">WFH Days</th>
+                            <th class="px-2 py-2 border text-xs font-medium text-gray-600" rowspan="2">WFO Days</th>
                         </tr>
                         <tr>
                             <th ng-repeat="day in summaryDays" class="px-2 py-1 border text-xs font-bold w-12" ng-class="{'bg-gray-200 text-gray-500': isWeekend(day)}">{{getDayName(day)}}</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr ng-repeat="employee in filteredEmployees" class="hover:bg-gray-50">
-                            <td class="px-2 py-2 border text-left font-medium text-gray-800 sticky left-0 bg-white hover:bg-gray-50 z-10 flex justify-between items-center" style="word-wrap: break-word; white-space: normal;">
-                                <input type="text" ng-model="employee.name" ng-focus="setOriginalName(employee.name)" ng-blur="updateEmployeeName(employee, originalName)" class="border-none bg-transparent w-full">
+                        <tr ng-repeat="employee in filteredEmployees track by $index" class="hover:bg-gray-50">
+                            <td class="px-2 py-2 border text-left font-medium text-gray-800 sticky left-0 bg-white hover:bg-gray-50 z-10 flex justify-between items-start w-48">
+                                <input type="text" ng-model="employee.name" ng-focus="setOriginalName(employee.name)" ng-blur="updateEmployeeName(employee, originalName)" class="border-none bg-transparent w-full truncate-text" title="{{employee.name}}">
                                 <button ng-click="deleteEmployee(employee.name)" class="text-red-500 hover:text-red-700 ml-4">🗑️</button>
                             </td>
                             <td ng-repeat="day in summaryDays" class="px-1 py-0 border" ng-class="{'bg-gray-200': isWeekend(day) && !getStatus(employee.name, day), 'wfh-blue': getStatus(employee.name, day) === 'H', 'office-green': getStatus(employee.name, day) === 'O', 'leave-red': getStatus(employee.name, day) === 'L', 'leave-half-orange': getStatus(employee.name, day) === 'L1' || getStatus(employee.name, day) === 'L2'}">
@@ -132,6 +153,9 @@
                             </td>
                             <td class="px-2 py-2 border font-bold" ng-class="{'text-green-600': getWfhCount(employee.name) >= 1 && getWfhCount(employee.name) <= 4, 'text-yellow-600': getWfhCount(employee.name) >= 5 && getWfhCount(employee.name) <= 7, 'text-red-600': getWfhCount(employee.name) >= 8}">
                                 {{getWfhCount(employee.name)}}
+                            </td>
+                            <td class="px-2 py-2 border font-bold">
+                                {{getWfoCount(employee.name)}}
                             </td>
                         </tr>
                     </tbody>
@@ -149,6 +173,7 @@
             $scope.summaryMonthYear = '';
             $scope.newEmployeeName = '';
             $scope.filters = { month: '' };
+            $scope.activeStatusFilter = null;
 
             // Load data from localStorage
             $scope.loadData = function() {
@@ -293,11 +318,26 @@
 
                 const currentMonthStr = year + '-' + ('0' + (month + 1)).slice(-2);
 
-                $scope.filteredEmployees = $scope.employees.filter(emp => {
+                let employeesToShow = $scope.employees.filter(emp => {
                     const isNotDeleted = !emp.deletedMonth || emp.deletedMonth > currentMonthStr;
                     const isStarted = !emp.startMonth || emp.startMonth <= currentMonthStr;
                     return isNotDeleted && isStarted;
                 });
+
+                if ($scope.activeStatusFilter) {
+                    employeesToShow = employeesToShow.filter(emp => {
+                        return $scope.summaryDays.some(day => {
+                            const status = $scope.getStatus(emp.name, day);
+                            if ($scope.activeStatusFilter === 'L1L2') {
+                                return status === 'L1' || status === 'L2';
+                            } else {
+                                return status === $scope.activeStatusFilter;
+                            }
+                        });
+                    });
+                }
+
+                $scope.filteredEmployees = employeesToShow;
 
                 // Initialize entries for the grid
                 $scope.filteredEmployees.forEach(emp => {
@@ -308,6 +348,7 @@
                         }
                     });
                 });
+                $scope.$broadcast('rerenderFinished');
                 
             };
 
@@ -358,6 +399,26 @@
                     }
                 });
                 return count;
+            };
+
+            // Calculate WFO counts
+            $scope.getWfoCount = function(name) {
+                let count = 0;
+                $scope.summaryDays.forEach(day => {
+                    if ($scope.getStatus(name, day) === 'O') {
+                        count++;
+                    }
+                });
+                return count;
+            };
+
+            $scope.setStatusFilter = function(status) {
+                if ($scope.activeStatusFilter === status) {
+                    $scope.activeStatusFilter = null; // Toggle off if same filter is clicked
+                } else {
+                    $scope.activeStatusFilter = status;
+                }
+                $scope.generateSummary();
             };
 
             // Export data to Excel
@@ -489,6 +550,44 @@
 
             // Initialize
             $scope.loadData();
+        })
+        .directive('columnResizer', function($document) {
+            return {
+                restrict: 'A',
+                link: function(scope, element, attrs) {
+                    var startX, startWidth;
+
+                    var resizer = element[0].querySelector('.resizer');
+
+                    resizer.addEventListener('mousedown', function(event) {
+                        startX = event.clientX;
+                        startWidth = element[0].offsetWidth;
+                        $document.on('mousemove', mousemove);
+                        $document.on('mouseup', mouseup);
+                        event.preventDefault();
+                    });
+
+                    function mousemove(event) {
+                        var width = startWidth + (event.clientX - startX);
+                        element.css('width', width + 'px');
+
+                        // Also resize the corresponding cells in the tbody
+                        var columnIndex = Array.from(element[0].parentNode.children).indexOf(element[0]);
+                        var rows = element[0].closest('table').querySelectorAll('tbody tr');
+                        rows.forEach(function(row) {
+                            var cell = row.children[columnIndex];
+                            if (cell) {
+                                cell.style.width = width + 'px';
+                            }
+                        });
+                    }
+
+                    function mouseup() {
+                        $document.off('mousemove', mousemove);
+                        $document.off('mouseup', mouseup);
+                    }
+                }
+            };
         });
     </script>
 </body>

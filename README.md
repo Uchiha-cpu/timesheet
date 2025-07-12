@@ -42,7 +42,6 @@ This option is ideal if you plan to extend the application, contribute to its de
 
 ## Features of Single-File Application (timesheet_app.html)
 
-
 ### Monthly Summary View
 
 The application now presents a single, Excel-like monthly grid. Each row represents an employee for the selected month.
@@ -69,16 +68,31 @@ Directly in the monthly summary grid, click on any day's cell for an employee to
 
 Changes are saved automatically.
 
+### Employee Name Display
+
+Employee names are now displayed in a single-line input field. For longer names, the text will truncate with an ellipsis (`...`). To view the full name, simply hover your mouse over the employee's name.
+
 ### Filtering by Month
 
 Use the "Filter by Month" input to select the month you want to view or edit. Employee names are automatically carried forward to the new month.
 *   **Clear Filter**: Clearing the month input (e.g., by clicking the 'x' icon in some browsers) will reset the filter to the current month.
 
-### Color-Coded WFH Summary
+### Filtering by Status
 
-The "WFH Days" column shows the total number of Work from Home days for each employee in the selected month. The count is color-coded:
-*   **Blue:** 1-8 WFH days
-*   **Red:** More than 8 WFH days
+Below the monthly summary, you can now click on the colored status boxes (H, O, L, L1/L2) to filter the employee list. Clicking a status will show only employees who have that status for at least one day in the selected month. Clicking the same filter again will clear it.
+
+### Color-Coded WFH and WFO Summaries
+
+The timesheet now includes two summary columns:
+*   **WFH Days**: Shows the total number of Work from Home days for each employee in the selected month. The count is color-coded:
+    *   **Green:** 1-4 WFH days
+    *   **Yellow:** 5-7 WFH days
+    *   **Red:** 8 or more WFH days
+*   **WFO Days**: Shows the total number of Work from Office days for each employee in the selected month.
+
+### Resizable Employee Name Column
+
+You can now resize the "Employee" name column by dragging the vertical line on its right edge, similar to how you would resize columns in Excel. The entire timesheet table will adjust its width accordingly.
 
 ### Day Name and Weekend Highlighting
 
