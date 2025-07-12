@@ -77,6 +77,10 @@ Employee names are now displayed in a single-line input field. For longer names,
 Use the "Filter by Month" input to select the month you want to view or edit. Employee names are automatically carried forward to the new month.
 *   **Clear Filter**: Clearing the month input (e.g., by clicking the 'x' icon in some browsers) will reset the filter to the current month.
 
+### Filtering by Name
+
+Use the "Filter by Name" input to quickly find employees by their name. As you type, the list of employees will dynamically update to show only those whose names match your input.
+
 ### Filtering by Status
 
 Below the monthly summary, you can now click on the colored status boxes (H, O, L, L1/L2) to filter the employee list. Clicking a status will show only employees who have that status for at least one day in the selected month. Clicking the same filter again will clear it.
